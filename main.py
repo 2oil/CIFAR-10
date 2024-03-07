@@ -14,6 +14,9 @@ import argparse
 from models import *
 from utils import progress_bar
 
+import ssl
+ssl._create_default_https_context = ssl._create_unverified_context
+
 best_acc = 0
 
 def main():
@@ -24,6 +27,7 @@ def main():
     args = parser.parse_args()
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
     # GPU를 사용할 수 있는지 확인
     gpu_available = torch.cuda.is_available()
 
@@ -50,8 +54,17 @@ def main():
 
     trainset = torchvision.datasets.CIFAR10(
         root='./data', train=True, download=True, transform=transform_train)
+
+    # Train set을 학습 및 검증 데이터셋으로 나누기
+    train_size = int(0.8 * len(trainset))
+    val_size = len(trainset) - train_size
+    train_dataset, val_dataset = torch.utils.data.random_split(trainset, [train_size, val_size])
+
     trainloader = torch.utils.data.DataLoader(
-        trainset, batch_size=128, shuffle=True, num_workers=2)
+        train_dataset, batch_size=128, shuffle=True, num_workers=2)
+
+    valloader = torch.utils.data.DataLoader(
+        val_dataset, batch_size=100, shuffle=False, num_workers=2)
 
     testset = torchvision.datasets.CIFAR10(
         root='./data', train=False, download=True, transform=transform_test)
@@ -59,25 +72,11 @@ def main():
         testset, batch_size=100, shuffle=False, num_workers=2)
 
     classes = ('plane', 'car', 'bird', 'cat', 'deer',
-             'dog', 'frog', 'horse', 'ship', 'truck')
+            'dog', 'frog', 'horse', 'ship', 'truck')
 
     # Model
     print('==> Building model..')
-# net = VGG('VGG19')
     net = ResNet18()
-# net = PreActResNet18()
-# net = GoogLeNet()
-# net = DenseNet121()
-# net = ResNeXt29_2x64d()
-# net = MobileNet()
-# net = MobileNetV2()
-# net = DPN92()
-# net = ShuffleNetG2()
-# net = SENet18()
-# net = ShuffleNetV2(1)
-# net = EfficientNetB0()
-# net = RegNetX_200MF()
-# net = SimpleDLA()
     net = net.to(device)
     if device == 'cuda':
         net = torch.nn.DataParallel(net)
@@ -94,7 +93,7 @@ def main():
 
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(net.parameters(), lr=args.lr,
-                         momentum=0.9, weight_decay=5e-4)
+                        momentum=0.9, weight_decay=5e-4)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
 
 
@@ -118,10 +117,30 @@ def main():
             total += targets.size(0)
             correct += predicted.eq(targets).sum().item()
 
-            progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-                         % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
+            progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | t_Acc: %.3f%% (%d/%d)\n'
+                        % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
+    # Validation
+    def validate():
+        net.eval()
+        val_loss = 0
+        correct = 0
+        total = 0
+        with torch.no_grad():
+            for batch_idx, (inputs, targets) in enumerate(valloader):
+                inputs, targets = inputs.to(device), targets.to(device)
+                outputs = net(inputs)
+                loss = criterion(outputs, targets)
 
+                val_loss += loss.item()
+                _, predicted = outputs.max(1)
+                total += targets.size(0)
+                correct += predicted.eq(targets).sum().item()
+
+                progress_bar(batch_idx, len(valloader), 'Loss: %.3f | v_Acc: %.3f%% (%d/%d)\n'
+                            % (val_loss/(batch_idx+1), 100.*correct/total, correct, total))
+
+        return 100. * correct / total
 
     def test(epoch):
         global best_acc
@@ -140,8 +159,8 @@ def main():
                 total += targets.size(0)
                 correct += predicted.eq(targets).sum().item()
 
-                progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-                             % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
+                progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)\n'
+                            % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
         # Save checkpoint.
         acc = 100.*correct/total
@@ -160,7 +179,7 @@ def main():
 
     for epoch in range(start_epoch, start_epoch+200):
         train(epoch)
-        test(epoch)
+        val_acc = validate()
         scheduler.step()
 
 if __name__ == '__main__':
