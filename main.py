@@ -117,7 +117,7 @@ def main():
             total += targets.size(0)
             correct += predicted.eq(targets).sum().item()
 
-            progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | t_Acc: %.3f%% (%d/%d)\n'
+            progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | t_Acc: %.3f%% (%d/%d)'
                         % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
     # Validation
@@ -137,7 +137,7 @@ def main():
                 total += targets.size(0)
                 correct += predicted.eq(targets).sum().item()
 
-                progress_bar(batch_idx, len(valloader), 'Loss: %.3f | v_Acc: %.3f%% (%d/%d)\n'
+                progress_bar(batch_idx, len(valloader), 'Loss: %.3f | v_Acc: %.3f%% (%d/%d)'
                             % (val_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
         return 100. * correct / total
@@ -159,7 +159,7 @@ def main():
                 total += targets.size(0)
                 correct += predicted.eq(targets).sum().item()
 
-                progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)\n'
+                progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                             % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
         # Save checkpoint.
